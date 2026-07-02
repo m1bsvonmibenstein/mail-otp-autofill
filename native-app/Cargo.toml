@@ -19,7 +19,7 @@ interprocess = "2"
 arboard = "3"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Media_Audio", "Win32_Foundation"] }
+windows-sys = { version = "0.59", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [lib]
 name = "otp_relay"

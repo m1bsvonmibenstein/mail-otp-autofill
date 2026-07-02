@@ -19,11 +19,19 @@ struct Note {
     subject: String,
     start: Instant,
     positioned: bool,
+    styled: bool,
     copied: bool,
 }
 
+const WINDOW_TITLE: &str = "otp-relay-notify";
+
 impl eframe::App for Note {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Make it a tool window (no taskbar button, no Alt+Tab entry) once created.
+        if !self.styled {
+            make_tool_window(WINDOW_TITLE);
+            self.styled = true;
+        }
         // Move to bottom-right once the monitor size is known (clear the taskbar).
         if !self.positioned {
             if let Some(ms) = ctx.input(|i| i.viewport().monitor_size) {
@@ -43,7 +51,7 @@ impl eframe::App for Note {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("VERIFICATION CODE").size(11.0).weak().strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new("\u{2715}").size(13.0)).clicked() {
+                    if ui.button(egui::RichText::new("\u{00D7}").size(18.0)).clicked() {
                         close = true;
                     }
                 });
@@ -104,6 +112,33 @@ fn play_chime() {
 #[cfg(not(windows))]
 fn play_chime() {}
 
+#[cfg(windows)]
+fn make_tool_window(title: &str) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    };
+    let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let hwnd = FindWindowW(std::ptr::null(), wide.as_ptr());
+        if !hwnd.is_null() {
+            let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            let new = (ex | WS_EX_TOOLWINDOW as isize) & !(WS_EX_APPWINDOW as isize);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new);
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn make_tool_window(_title: &str) {}
+
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let note = Note {
@@ -112,6 +147,7 @@ fn main() -> eframe::Result<()> {
         subject: arg(&args, "--subject"),
         start: Instant::now(),
         positioned: false,
+        styled: false,
         copied: false,
     };
 
@@ -126,7 +162,7 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "otp-notify",
+        WINDOW_TITLE,
         options,
         Box::new(|_cc| Ok(Box::new(note) as Box<dyn eframe::App>)),
     )
