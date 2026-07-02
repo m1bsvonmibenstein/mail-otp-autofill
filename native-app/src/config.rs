@@ -2,7 +2,7 @@
 //!
 //! Non-secret account info lives in a JSON file under the user's config dir.
 //! App passwords live in the OS keychain (Windows Credential Manager / macOS
-//! Keychain / Linux Secret Service) via the `keyring` crate — never on disk.
+//! Keychain / Linux Secret Service) via the `keyring` crate - never on disk.
 
 use serde::{Deserialize, Serialize};
 use std::io;

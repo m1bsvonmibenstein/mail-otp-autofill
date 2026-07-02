@@ -1,9 +1,9 @@
-//! otp-relay — local native-messaging host for the Mail OTP Autofill extension.
+//! otp-relay - local native-messaging host for the Mail OTP Autofill extension.
 //!
 //! Default (launched by the browser): connect to each configured IMAP account,
 //! watch via IDLE, and push verification codes to the extension over stdio.
 //! Runs while the browser holds the native-messaging port open (which keeps the
-//! extension's service worker — and therefore this process — alive).
+//! extension's service worker - and therefore this process - alive).
 //!
 //! CLI (run from a terminal) manages accounts:
 //!   otp-relay add --label mailcow --host mail.example.com --user you@example.com [--port 993]
@@ -25,7 +25,7 @@ fn now_ms() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
-/// File logging only — stdout is reserved for the native-messaging protocol.
+/// File logging only - stdout is reserved for the native-messaging protocol.
 fn log(msg: &str) {
     let path = std::env::temp_dir().join("otp_relay.log");
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
@@ -115,7 +115,7 @@ fn run_host() {
     let mut lock = stdin.lock();
     loop {
         match read_message(&mut lock) {
-            Some(_msg) => { /* e.g. {"type":"used"} — nothing to do host-side yet */ }
+            Some(_msg) => { /* e.g. {"type":"used"} - nothing to do host-side yet */ }
             None => {
                 log("stdin closed / exit");
                 std::process::exit(0);
@@ -229,7 +229,7 @@ fn test_connect(a: &config::Account, pw: &str) -> Result<u32, Box<dyn std::error
 
 fn print_help() {
     println!(
-        "otp-relay — Mail OTP Autofill native host\n\n\
+        "otp-relay - Mail OTP Autofill native host\n\n\
          Run with no arguments to act as the browser's native-messaging host.\n\n\
          Account management:\n\
          \x20 add --label <n> --host <h> --user <u> [--port 993]   add/update an account\n\

@@ -11,7 +11,7 @@ function render(rec) {
     document.getElementById('code').textContent = rec.code;
     var sub = document.getElementById('sub');
     var from = rec.meta && rec.meta.from ? (rec.meta.from.name || rec.meta.from.email || '') : '';
-    var line = [from, rec.meta && rec.meta.subject].filter(Boolean).join(' — ');
+    var line = [from, rec.meta && rec.meta.subject].filter(Boolean).join(' - ');
     if (line) { sub.textContent = line; sub.style.display = 'block'; }
     else sub.style.display = 'none';
   }

@@ -94,7 +94,7 @@
     if (hideTimer) clearTimeout(hideTimer);
     var from = (meta && meta.from) ? (meta.from.name || meta.from.email || '') : '';
     var subj = [from, (meta && meta.subject) ? String(meta.subject) : '']
-      .filter(Boolean).join(' — ');
+      .filter(Boolean).join(' - ');
     var wrap = document.createElement('div');
     wrap.className = 'card';
     wrap.innerHTML =

@@ -50,7 +50,7 @@ function flashMsg(t, ok) {
   el.style.color = ok ? '#16a34a' : '#b91c1c';
 }
 
-// Direct native-messaging probe from the options page — reports hello/pong or the
+// Direct native-messaging probe from the options page - reports hello/pong or the
 // exact lastError (e.g. "host not found"), so native setup can be diagnosed.
 function testNative() {
   flashMsg('Testing native app…', true);
@@ -96,7 +96,7 @@ async function save() {
     if (!pat) { flashMsg('Enter your webmail origin (e.g. https://mail.example.com).'); return; }
     var ok = false;
     try { ok = await api.permissions.request({ origins: [pat] }); } catch (e) { ok = false; }
-    if (!ok) { flashMsg('Permission for ' + cfg.origin + ' was declined — polling cannot run.'); return; }
+    if (!ok) { flashMsg('Permission for ' + cfg.origin + ' was declined - polling cannot run.'); return; }
   }
 
   await api.storage.local.set({ otpConfig: cfg });

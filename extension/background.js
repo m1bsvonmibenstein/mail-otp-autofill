@@ -48,7 +48,7 @@ async function handleNew(msg) {
         type: 'basic',
         iconUrl: api.runtime.getURL('icons/icon-128.png'),
         title: 'Verification code: ' + rec.code,
-        message: (rec.meta.from && rec.meta.from.name ? rec.meta.from.name + ' — ' : '') +
+        message: (rec.meta.from && rec.meta.from.name ? rec.meta.from.name + ' - ' : '') +
                  (rec.meta.subject || 'New code received'),
         priority: 2
       });

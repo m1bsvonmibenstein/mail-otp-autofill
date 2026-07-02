@@ -4,7 +4,7 @@ native-app/target/
 # Generated native-messaging manifests (contain absolute local paths)
 native-app/host-manifest/
 
-# Signing / private keys — never commit
+# Signing / private keys - never commit
 *.pem
 otp-autofill-signing-key.pem
 
