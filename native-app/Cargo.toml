@@ -1,8 +1,8 @@
 [package]
 name = "otp-relay"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-description = "Local native-messaging host that watches IMAP mailboxes (IDLE) and pushes verification codes to the Mail OTP Autofill browser extension."
+description = "Local native-messaging host that watches IMAP mailboxes (IDLE) and pushes verification codes to the Mail OTP Autofill browser extension, plus a GUI account manager."
 
 [dependencies]
 imap = "2.4"
@@ -14,10 +14,19 @@ serde_json = "1"
 keyring = "2"
 rpassword = "7"
 dirs = "5"
+eframe = "0.29"
+
+[lib]
+name = "otp_relay"
+path = "src/lib.rs"
 
 [[bin]]
 name = "otp-relay"
 path = "src/main.rs"
+
+[[bin]]
+name = "otp-relay-gui"
+path = "src/gui.rs"
 
 [profile.release]
 opt-level = "z"

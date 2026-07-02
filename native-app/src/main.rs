@@ -11,9 +11,7 @@
 //!   otp-relay remove --label mailcow
 //!   otp-relay test         # connect to each account once and report
 
-mod config;
-mod mailwatch;
-mod otp;
+use otp_relay::{config, mailwatch};
 
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
@@ -211,20 +209,11 @@ fn cli_test() {
             Ok(p) => p,
             Err(e) => { println!("no password: {}", e); continue; }
         };
-        match test_connect(a, &pw) {
+        match mailwatch::check_connection(a, &pw) {
             Ok(n) => println!("OK ({} messages in INBOX)", n),
             Err(e) => println!("FAILED: {}", e),
         }
     }
-}
-
-fn test_connect(a: &config::Account, pw: &str) -> Result<u32, Box<dyn std::error::Error>> {
-    let tls = native_tls::TlsConnector::builder().build()?;
-    let client = imap::connect((a.host.as_str(), a.port), a.host.as_str(), &tls)?;
-    let mut session = client.login(&a.user, pw).map_err(|(e, _)| e)?;
-    let mb = session.select("INBOX")?;
-    let _ = session.logout();
-    Ok(mb.exists)
 }
 
 fn print_help() {

@@ -63,6 +63,16 @@ fn run_once<F: Fn(&str)>(
     }
 }
 
+/// One-shot connectivity check used by `otp-relay test` and the GUI.
+pub fn check_connection(account: &Account, password: &str) -> Result<u32, Box<dyn std::error::Error>> {
+    let tls = native_tls::TlsConnector::builder().build()?;
+    let client = imap::connect((account.host.as_str(), account.port), account.host.as_str(), &tls)?;
+    let mut session = client.login(&account.user, password).map_err(|(e, _)| e)?;
+    let mb = session.select("INBOX")?;
+    let _ = session.logout();
+    Ok(mb.exists)
+}
+
 fn extract(account: &Account, raw: &[u8]) -> Option<CodeEvent> {
     let msg = mail_parser::MessageParser::default().parse(raw)?;
     let subject = msg.subject().unwrap_or("").to_string();

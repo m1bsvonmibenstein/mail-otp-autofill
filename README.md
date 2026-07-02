@@ -38,9 +38,11 @@ cd native-app
 powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 ```
 
-This builds the host and registers it for Chrome, Edge, and Firefox (current user).
+This builds the host + GUI, registers the host for Chrome, Edge, and Firefox
+(current user), and adds a Start Menu shortcut ("Mail OTP Autofill").
 
-Then add each mailbox (the app password goes into the OS keychain, never on disk):
+Add mailboxes with the **GUI** (Start Menu, or run `otp-relay-gui`), or the CLI
+(the app password goes into the OS keychain, never on disk):
 
 ```powershell
 .\target\release\otp-relay.exe add --label mailcow --host mail.example.com --user you@example.com
