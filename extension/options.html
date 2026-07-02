@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mail OTP Autofill — Settings</title>
+<style>
+  body { font: 14px system-ui, Segoe UI, sans-serif; max-width: 520px; margin: 32px auto; padding: 0 20px;
+         color: #1c1e26; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; margin: 26px 0 8px; }
+  label { display: block; margin: 16px 0 4px; font-weight: 600; }
+  .hint { font-weight: 400; font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+  input[type=text], input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid #cbd0da;
+         border-radius: 8px; font: inherit; box-sizing: border-box; }
+  .radio { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-weight: 600; }
+  .radio input { width: auto; margin-top: 3px; }
+  .radio .hint { font-weight: 400; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-weight: 600; }
+  .check input { width: auto; }
+  .row2 { display: flex; gap: 14px; }
+  .row2 > div { flex: 1; }
+  #native-note { display: none; background: #eef1fb; border: 1px solid #d5dcf5; border-radius: 8px;
+                 padding: 12px 14px; font-size: 13px; color: #364; margin-top: 8px; }
+  button { margin-top: 22px; background: #3f51b5; color: #fff; border: none; border-radius: 8px;
+           padding: 10px 18px; font: 600 14px system-ui; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  #saved { margin-left: 12px; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity .2s; }
+  #msg { margin-top: 10px; color: #b91c1c; font-size: 13px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <h1>Mail OTP Autofill</h1>
+
+  <h2>Code source</h2>
+  <label class="radio">
+    <input type="radio" name="source" value="tab" checked>
+    <span>Webmail tab
+      <div class="hint">Reads codes from an open webmail tab. No install, no stored credentials. A webmail tab must stay open.</div>
+    </span>
+  </label>
+  <label class="radio">
+    <input type="radio" name="source" value="native">
+    <span>Native app (no tab needed)
+      <div class="hint">A local background app watches your mailbox over IMAP and pushes codes. No tab required. Requires installing the companion app.</div>
+    </span>
+  </label>
+
+  <div id="native-note">
+    Native mode needs the companion app installed and its native-messaging host registered.
+    See the project README for setup. Account/IMAP settings live in the app's own config, not here.
+  </div>
+
+  <div id="tab-fields">
+    <h2>Webmail (tab mode)</h2>
+    <label>Webmail origin
+      <div class="hint">Base URL of your mailcow/SOGo server. You'll be asked to grant access to it on Save.</div>
+    </label>
+    <input type="text" id="origin" placeholder="https://mail.example.com">
+
+    <label>Login (webmail address)
+      <div class="hint">Auto-detected from the SOGo tab if left blank.</div>
+    </label>
+    <input type="text" id="login" placeholder="you@yourdomain.tld">
+
+    <label>Inbox folder path
+      <div class="hint">SOGo folder id. Default is the main inbox.</div>
+    </label>
+    <input type="text" id="folder" placeholder="0/folderINBOX">
+
+    <div class="row2">
+      <div>
+        <label>Poll interval (sec)</label>
+        <input type="number" id="pollSec" min="10" step="5">
+      </div>
+      <div>
+        <label>Code stays fresh (sec)</label>
+        <input type="number" id="ttlSec" min="30" step="30">
+      </div>
+    </div>
+
+    <label class="check"><input type="checkbox" id="restoreUnread"> Keep peeked mail marked unread</label>
+    <label class="check"><input type="checkbox" id="enabled"> Polling enabled</label>
+  </div>
+
+  <label class="check"><input type="checkbox" id="notify"> Show browser notifications</label>
+
+  <div>
+    <button id="save">Save</button>
+    <span id="saved">Saved ✓</span>
+  </div>
+  <div id="msg"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Rust build output
+native-app/target/
+
+# Generated native-messaging manifests (contain absolute local paths)
+native-app/host-manifest/
+
+# Signing / private keys — never commit
+*.pem
+otp-autofill-signing-key.pem
+
+# Spike/debug logs
+otp_relay_spike.log
+
+# Key helper artifacts (public key already lives in manifest.json)
+extension/.ext-key.txt
+extension/.ext-id.txt
+
+# OS cruft
+Thumbs.db
+.DS_Store
