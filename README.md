@@ -56,6 +56,20 @@ Add mailboxes with the **GUI** (Start Menu, or run `otp-relay-gui`), or the CLI
 .\target\release\otp-relay.exe list
 ```
 
+#### Providers
+
+Any IMAP mailbox works. The GUI has one-click presets for the common ones:
+
+| Provider | IMAP host | Notes |
+|----------|-----------|-------|
+| mailcow / self-hosted | your mail host | mailbox password or a mailcow app password |
+| Gmail | `imap.gmail.com` | requires 2-step verification + a Google **app password** |
+| Outlook / Microsoft 365 | `outlook.office365.com` | requires an app password |
+| iCloud | `imap.mail.me.com` | requires an app password |
+
+Gmail/Outlook/iCloud reject your normal password over IMAP - generate an app
+password in the account's security settings and use that.
+
 Finally, set the extension's code source to **Native app**. New mail is watched in
 real time over IMAP IDLE and codes are pushed to the extension; messages are read
 with `BODY.PEEK`, so they are never marked read.
@@ -66,7 +80,8 @@ with `BODY.PEEK`, so they are never marked read.
 - [x] **Multi-account** - watch several mailboxes; codes are tagged by account.
 - [x] **Native app: auto copy to clipboard** - optionally copy the code the instant it arrives (toggle in the GUI).
 - [x] **Native app: desktop notifications** - OS-level notification from the daemon, independent of the browser (Windows may need an AppUserModelID to display).
-- [ ] **Gmail adapter** - content-script source for the open Gmail tab (no OAuth), and/or IMAP via app password in native mode.
+- [x] **Gmail / Outlook / iCloud** - via IMAP + app password in native mode (GUI presets).
+- [ ] **Gmail tab adapter** - content-script source for the open Gmail tab (only needed for tab mode, no OAuth).
 - [ ] **Signed builds** - code-sign the native binary (Windows) and notarize (macOS) to drop install warnings.
 - [ ] **Store listings** - Chrome Web Store + Firefox AMO + Edge/Opera.
 

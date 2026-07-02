@@ -146,6 +146,22 @@ impl eframe::App for GuiApp {
             ui.add_space(8.0);
             ui.separator();
             ui.strong("Add / update account");
+            ui.horizontal(|ui| {
+                ui.label("Preset:");
+                if ui.button("Gmail").clicked() {
+                    self.n_host = "imap.gmail.com".into();
+                    self.n_port = "993".into();
+                }
+                if ui.button("Outlook").clicked() {
+                    self.n_host = "outlook.office365.com".into();
+                    self.n_port = "993".into();
+                }
+                if ui.button("iCloud").clicked() {
+                    self.n_host = "imap.mail.me.com".into();
+                    self.n_port = "993".into();
+                }
+            });
+            ui.small("Gmail / Outlook / iCloud need an app password (with 2-step verification enabled), not your normal password.");
             egui::Grid::new("add_grid").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
                 ui.label("Label");
                 ui.text_edit_singleline(&mut self.n_label);
