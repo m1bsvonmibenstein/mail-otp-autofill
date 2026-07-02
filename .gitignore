@@ -24,3 +24,6 @@ extension/.ext-id.txt
 # OS cruft
 Thumbs.db
 .DS_Store
+
+# Distribution build output
+dist/
