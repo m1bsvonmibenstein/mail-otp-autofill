@@ -16,8 +16,10 @@ rpassword = "7"
 dirs = "5"
 eframe = "0.29"
 interprocess = "2"
-notify-rust = "4"
 arboard = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Media_Audio", "Win32_Foundation"] }
 
 [lib]
 name = "otp_relay"
@@ -38,6 +40,10 @@ path = "src/daemon.rs"
 [[bin]]
 name = "otp-relay-bridge"
 path = "src/bridge.rs"
+
+[[bin]]
+name = "otp-relay-notify"
+path = "src/notify.rs"
 
 [profile.release]
 opt-level = "z"

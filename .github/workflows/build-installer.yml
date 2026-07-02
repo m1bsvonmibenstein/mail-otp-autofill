@@ -1,0 +1,46 @@
+name: Build installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native-app/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('native-app/Cargo.lock') }}
+
+      - name: Build binaries (release)
+        working-directory: native-app
+        run: cargo build --release
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\mail-otp-autofill.iss'
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MailOtpAutofill-Setup
+          path: installer/Output/MailOtpAutofill-Setup.exe
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/MailOtpAutofill-Setup.exe

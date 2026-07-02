@@ -32,6 +32,7 @@ Source: "{#SrcBin}\otp-relay.exe";        DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcBin}\otp-relay-bridge.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcBin}\otp-relay-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SrcBin}\otp-relay-gui.exe";    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcBin}\otp-relay-notify.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "app.ico";                        DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

@@ -105,7 +105,7 @@ fn main() {
                 }
 
                 if notify_on {
-                    notify(&ev);
+                    spawn_notifier(&ev);
                 }
                 if auto_copy {
                     if let Err(e) = set_clipboard(&ev.code) {
@@ -138,16 +138,22 @@ fn main() {
     }
 }
 
-fn notify(ev: &mailwatch::CodeEvent) {
-    let body = if ev.from_name.is_empty() {
-        ev.subject.clone()
-    } else {
-        format!("{} - {}", ev.from_name, ev.subject)
-    };
-    let _ = notify_rust::Notification::new()
-        .summary(&format!("Verification code: {}", ev.code))
-        .body(&body)
-        .show();
+/// Spawn the custom notification popup (sibling exe) for a new code.
+fn spawn_notifier(ev: &mailwatch::CodeEvent) {
+    let name = if cfg!(windows) { "otp-relay-notify.exe" } else { "otp-relay-notify" };
+    let exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(name)));
+    if let Some(exe) = exe {
+        let _ = std::process::Command::new(exe)
+            .arg("--code")
+            .arg(&ev.code)
+            .arg("--from")
+            .arg(&ev.from_name)
+            .arg("--subject")
+            .arg(&ev.subject)
+            .spawn();
+    }
 }
 
 fn set_clipboard(code: &str) -> Result<(), Box<dyn std::error::Error>> {
