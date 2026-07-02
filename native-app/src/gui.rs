@@ -20,25 +20,37 @@ struct GuiApp {
     n_user: String,
     n_pass: String,
     status: String,
+    notify: bool,
+    auto_copy: bool,
     results: Results,
 }
 
 impl GuiApp {
     fn new() -> Self {
+        let cfg = config::load();
         GuiApp {
-            accounts: config::load().accounts,
+            accounts: cfg.accounts,
             n_label: String::new(),
             n_host: String::new(),
             n_port: String::from("993"),
             n_user: String::new(),
             n_pass: String::new(),
             status: String::new(),
+            notify: cfg.notify,
+            auto_copy: cfg.auto_copy,
             results: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     fn reload(&mut self) {
         self.accounts = config::load().accounts;
+    }
+
+    fn save_settings(&self) {
+        let mut cfg = config::load();
+        cfg.notify = self.notify;
+        cfg.auto_copy = self.auto_copy;
+        let _ = config::save(&cfg);
     }
 
     fn add_account(&mut self) {
@@ -155,6 +167,17 @@ impl eframe::App for GuiApp {
             if ui.button("Save account").clicked() {
                 self.add_account();
             }
+
+            ui.add_space(8.0);
+            ui.separator();
+            ui.strong("Settings");
+            if ui.checkbox(&mut self.notify, "Desktop notification when a code arrives").changed() {
+                self.save_settings();
+            }
+            if ui.checkbox(&mut self.auto_copy, "Auto-copy the code to the clipboard").changed() {
+                self.save_settings();
+            }
+            ui.small("Applied by the background daemon; changes take effect on its next start.");
 
             if !self.status.is_empty() {
                 ui.add_space(6.0);

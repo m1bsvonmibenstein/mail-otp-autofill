@@ -12,7 +12,7 @@ other mail sources slot in.
 | Mode | How it gets codes | Trade-off |
 |------|-------------------|-----------|
 | **Webmail tab** | A content script in your open webmail tab reads new mail via the SOGo API (same-origin, uses your existing login). | Zero install, **no stored credentials**. A webmail tab must stay open; ~60s latency when it's backgrounded. |
-| **Native app** | A small local background app (`native-app/`) watches your mailbox over IMAP IDLE and pushes codes to the extension via native messaging. | **No tab needed**, real-time. Requires installing the companion app; it holds IMAP app passwords in the OS keychain. |
+| **Native app** | An always-on local daemon (`native-app/`) watches your mailbox over IMAP IDLE and pushes codes to a thin native-messaging bridge the browser spawns. | **No tab needed**, real-time, works even with the browser closed (desktop notification + optional auto-copy). Requires installing the companion app; it holds IMAP app passwords in the OS keychain. |
 
 The extension is the same in both modes - only the *source* of the code changes.
 
@@ -56,10 +56,10 @@ with `BODY.PEEK`, so they are never marked read.
 
 ## Roadmap
 
-- [x] **Native app: IMAP IDLE watcher** - real code source (mailcow + any IMAP), keychain-backed credentials.
+- [x] **Native app: always-on daemon + bridge** - IMAP IDLE watcher (mailcow + any IMAP), keychain-backed, autostarts at login, GUI account manager.
 - [x] **Multi-account** - watch several mailboxes; codes are tagged by account.
-- [ ] **Native app: auto copy to clipboard** - optionally copy the code automatically the instant it arrives.
-- [ ] **Native app: desktop notifications** - OS-level notification from the daemon, independent of the browser.
+- [x] **Native app: auto copy to clipboard** - optionally copy the code the instant it arrives (toggle in the GUI).
+- [x] **Native app: desktop notifications** - OS-level notification from the daemon, independent of the browser (Windows may need an AppUserModelID to display).
 - [ ] **Gmail adapter** - content-script source for the open Gmail tab (no OAuth), and/or IMAP via app password in native mode.
 - [ ] **Signed builds** - code-sign the native binary (Windows) and notarize (macOS) to drop install warnings.
 - [ ] **Store listings** - Chrome Web Store + Firefox AMO + Edge/Opera.

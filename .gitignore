@@ -4,6 +4,9 @@ native-app/target/
 # Generated native-messaging manifests (contain absolute local paths)
 native-app/host-manifest/
 
+# Generated autostart launcher (absolute local path)
+native-app/launch-daemon.vbs
+
 # Signing / private keys - never commit
 *.pem
 otp-autofill-signing-key.pem

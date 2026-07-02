@@ -15,6 +15,9 @@ keyring = "2"
 rpassword = "7"
 dirs = "5"
 eframe = "0.29"
+interprocess = "2"
+notify-rust = "4"
+arboard = "3"
 
 [lib]
 name = "otp_relay"
@@ -27,6 +30,14 @@ path = "src/main.rs"
 [[bin]]
 name = "otp-relay-gui"
 path = "src/gui.rs"
+
+[[bin]]
+name = "otp-relay-daemon"
+path = "src/daemon.rs"
+
+[[bin]]
+name = "otp-relay-bridge"
+path = "src/bridge.rs"
 
 [profile.release]
 opt-level = "z"

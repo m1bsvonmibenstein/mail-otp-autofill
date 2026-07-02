@@ -23,10 +23,26 @@ fn default_port() -> u16 {
     993
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub accounts: Vec<Account>,
+    /// Show a desktop notification when a code arrives (daemon mode).
+    #[serde(default = "default_true")]
+    pub notify: bool,
+    /// Automatically copy the code to the clipboard the instant it arrives.
+    #[serde(default)]
+    pub auto_copy: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config { accounts: Vec::new(), notify: true, auto_copy: false }
+    }
 }
 
 pub fn config_path() -> PathBuf {
