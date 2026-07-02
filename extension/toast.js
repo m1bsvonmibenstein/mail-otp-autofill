@@ -95,25 +95,40 @@
     var from = (meta && meta.from) ? (meta.from.name || meta.from.email || '') : '';
     var subj = [from, (meta && meta.subject) ? String(meta.subject) : '']
       .filter(Boolean).join(' - ');
-    var wrap = document.createElement('div');
-    wrap.className = 'card';
-    wrap.innerHTML =
-      '<div class="hdr"><span class="ttl">Verification code</span><span class="x">&times;</span></div>' +
-      '<div class="code"></div>' +
-      (subj ? '<div class="sub"></div>' : '') +
-      '<div class="row"><button class="copy">Copy</button><button class="fill">Autofill</button></div>' +
-      '<div class="msg"></div>';
-    wrap.querySelector('.code').textContent = code;
-    if (subj) wrap.querySelector('.sub').textContent = subj;
+    // Build with DOM APIs (no innerHTML) to satisfy extension-store review.
+    function mk(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+    var wrap = mk('div', 'card');
 
-    var msgEl = wrap.querySelector('.msg');
+    var hdr = mk('div', 'hdr');
+    hdr.appendChild(mk('span', 'ttl', 'Verification code'));
+    var xBtn = mk('span', 'x', '×');
+    hdr.appendChild(xBtn);
+    wrap.appendChild(hdr);
+
+    wrap.appendChild(mk('div', 'code', code));
+    if (subj) wrap.appendChild(mk('div', 'sub', subj));
+
+    var row = mk('div', 'row');
+    var copyBtn = mk('button', 'copy', 'Copy');
+    var fillBtn = mk('button', 'fill', 'Autofill');
+    row.appendChild(copyBtn);
+    row.appendChild(fillBtn);
+    wrap.appendChild(row);
+
+    var msgEl = mk('div', 'msg');
+    wrap.appendChild(msgEl);
     function flash(txt) { msgEl.textContent = txt; }
 
-    wrap.querySelector('.x').addEventListener('click', function () { dismiss(); hide(); });
-    wrap.querySelector('.copy').addEventListener('click', function () {
+    xBtn.addEventListener('click', function () { dismiss(); hide(); });
+    copyBtn.addEventListener('click', function () {
       copy(code).then(function () { flash('Copied ' + code); dismiss(); });
     });
-    wrap.querySelector('.fill').addEventListener('click', function () {
+    fillBtn.addEventListener('click', function () {
       var res = autofill(code);
       flash(res.ok ? 'Filled ✓' : res.msg);
       if (res.ok) dismiss();
