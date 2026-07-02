@@ -44,7 +44,35 @@ function flashSaved() {
   s.style.opacity = '1';
   setTimeout(function () { s.style.opacity = '0'; }, 1500);
 }
-function flashMsg(t) { document.getElementById('msg').textContent = t || ''; }
+function flashMsg(t, ok) {
+  var el = document.getElementById('msg');
+  el.textContent = t || '';
+  el.style.color = ok ? '#16a34a' : '#b91c1c';
+}
+
+// Direct native-messaging probe from the options page — reports hello/pong or the
+// exact lastError (e.g. "host not found"), so native setup can be diagnosed.
+function testNative() {
+  flashMsg('Testing native app…', true);
+  var port, done = false;
+  try { port = api.runtime.connectNative('com.mibs.otp_relay'); }
+  catch (e) { flashMsg('connectNative threw: ' + e.message); return; }
+  var timer = setTimeout(function () {
+    if (done) return; done = true;
+    try { port.disconnect(); } catch (e) {}
+    flashMsg('No reply from native app within 3s (is it hanging?).');
+  }, 3000);
+  port.onMessage.addListener(function (m) {
+    if (done) return; done = true; clearTimeout(timer);
+    try { port.disconnect(); } catch (e) {}
+    flashMsg('Native app connected ✓  reply: ' + JSON.stringify(m), true);
+  });
+  port.onDisconnect.addListener(function () {
+    if (done) return; done = true; clearTimeout(timer);
+    var err = (api.runtime.lastError && api.runtime.lastError.message) || 'disconnected with no message';
+    flashMsg('Native app error: ' + err);
+  });
+}
 
 async function save() {
   flashMsg('');
@@ -80,4 +108,5 @@ Array.prototype.forEach.call(document.querySelectorAll('input[name=source]'), fu
   el.addEventListener('change', toggleTabFields);
 });
 document.getElementById('save').addEventListener('click', save);
+document.getElementById('test-native').addEventListener('click', testNative);
 load();
