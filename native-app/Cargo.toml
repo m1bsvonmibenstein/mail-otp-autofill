@@ -1,12 +1,19 @@
 [package]
 name = "otp-relay"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Local native-messaging host that watches IMAP mailboxes and pushes verification codes to the Mail OTP Autofill browser extension."
+description = "Local native-messaging host that watches IMAP mailboxes (IDLE) and pushes verification codes to the Mail OTP Autofill browser extension."
 
-# NOTE: currently the native-messaging lifecycle SPIKE only (no IMAP yet).
-# IMAP IDLE + keychain deps get added once the spike decides the process model.
 [dependencies]
+imap = "2.4"
+native-tls = "0.2"
+mail-parser = "0.9"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+keyring = "2"
+rpassword = "7"
+dirs = "5"
 
 [[bin]]
 name = "otp-relay"
