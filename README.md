@@ -31,7 +31,13 @@ The extension is the same in both modes - only the *source* of the code changes.
 Then open the extension's **Settings**, choose a code source, and (tab mode) enter your webmail origin and Save - you'll be prompted to grant access to that server.
 
 ### Native app (optional, for "no tab" mode)
-Requires the [Rust toolchain](https://rustup.rs). Windows:
+
+**Easiest (Windows):** run the one-click installer `MailOtpAutofill-Setup.exe` (from
+Releases, or build it with `installer/mail-otp-autofill.iss` via Inno Setup). It
+installs per-user, registers the native host, autostarts the background daemon, and
+adds a Start Menu shortcut - then opens the GUI so you can add accounts.
+
+**From source:** requires the [Rust toolchain](https://rustup.rs).
 
 ```powershell
 cd native-app

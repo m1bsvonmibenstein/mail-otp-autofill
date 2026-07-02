@@ -1,6 +1,9 @@
 # Rust build output
 native-app/target/
 
+# Compiled installer output (attach to a GitHub Release instead)
+installer/Output/
+
 # Generated native-messaging manifests (contain absolute local paths)
 native-app/host-manifest/
 
