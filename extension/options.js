@@ -107,6 +107,17 @@ async function save() {
 Array.prototype.forEach.call(document.querySelectorAll('input[name=source]'), function (el) {
   el.addEventListener('change', toggleTabFields);
 });
+function refreshDbg() {
+  api.storage.local.get('otpDbg').then(function (o) {
+    var a = (o && o.otpDbg) || [];
+    document.getElementById('dbg').textContent = a.length ? a.join('\n') : '(no events yet)';
+  });
+}
+function clearDbg() { api.storage.local.set({ otpDbg: [] }).then(refreshDbg); }
+
 document.getElementById('save').addEventListener('click', save);
 document.getElementById('test-native').addEventListener('click', testNative);
+document.getElementById('refresh-dbg').addEventListener('click', refreshDbg);
+document.getElementById('clear-dbg').addEventListener('click', clearDbg);
 load();
+refreshDbg();

@@ -12,6 +12,17 @@ var DEFAULTS = {
   notify: true
 };
 
+// --- diagnostics (spike): ring-buffer to storage so options can display it ---
+function dbg(m) {
+  try { console.log('[OTP]', m); } catch (e) {}
+  api.storage.local.get('otpDbg').then(function (o) {
+    var a = (o && o.otpDbg) || [];
+    a.push(new Date().toISOString().slice(11, 23) + ' ' + m);
+    if (a.length > 40) a = a.slice(-40);
+    api.storage.local.set({ otpDbg: a });
+  }).catch(function () {});
+}
+
 async function getCfg() {
   var o = await api.storage.local.get('otpConfig');
   return Object.assign({}, DEFAULTS, (o && o.otpConfig) || {});
@@ -64,7 +75,7 @@ async function syncPoller() {
   var pattern = cfg.origin.replace(/\/+$/, '') + '/*';
   var granted = false;
   try { granted = await api.permissions.contains({ origins: [pattern] }); } catch (e) {}
-  if (!granted) return; // options page requests the permission on the Save gesture
+  if (!granted) { dbg('poller: no permission for ' + pattern); return; }
   try {
     await api.scripting.registerContentScripts([{
       id: POLLER_ID,
@@ -73,24 +84,28 @@ async function syncPoller() {
       runAt: 'document_idle',
       persistAcrossSessions: true
     }]);
-  } catch (e) { /* pattern may be invalid */ }
+    dbg('poller registered on ' + pattern);
+  } catch (e) { dbg('poller register error: ' + e.message); }
 }
 
 // --- code source: native-messaging daemon ----------------------------------
 var nativePort = null;
 
 function connectNative() {
-  if (nativePort) return;
+  if (nativePort) { dbg('connectNative: already connected'); return; }
+  dbg('connectNative: attempting');
   try {
     nativePort = api.runtime.connectNative(NATIVE_HOST);
-  } catch (e) { nativePort = null; return; }
+  } catch (e) { nativePort = null; dbg('connectNative threw: ' + e.message); return; }
+  dbg('connectNative: port created');
   nativePort.onMessage.addListener(function (msg) {
-    // Spike stub sends {type:'hello'}; real daemon sends {type:'code', code, meta}.
+    dbg('native recv: ' + JSON.stringify(msg));
     if (msg && msg.type === 'code' && msg.code) handleNew({ code: msg.code, meta: msg.meta });
   });
   nativePort.onDisconnect.addListener(function () {
+    var err = (api.runtime.lastError && api.runtime.lastError.message) || 'no error';
     nativePort = null;
-    // Reconnect if we are still in native mode (the daemon/bridge may have exited).
+    dbg('native disconnect: ' + err);
     getCfg().then(function (cfg) { if (cfg.source === 'native') scheduleNativeReconnect(); });
   });
 }
@@ -100,12 +115,12 @@ function disconnectNative() {
 }
 
 function scheduleNativeReconnect() {
-  // Keep-alive: an alarm re-wakes the SW and reconnects if the port dropped.
   try { api.alarms.create('native-keepalive', { periodInMinutes: 0.5 }); } catch (e) {}
 }
 
 async function applySource() {
   var cfg = await getCfg();
+  dbg('applySource: source=' + cfg.source);
   if (cfg.source === 'native') { disconnectNative(); connectNative(); scheduleNativeReconnect(); }
   else { disconnectNative(); try { api.alarms.clear('native-keepalive'); } catch (e) {} }
   await syncPoller();
@@ -113,6 +128,7 @@ async function applySource() {
 
 api.alarms && api.alarms.onAlarm.addListener(function (a) {
   if (a && a.name === 'native-keepalive') {
+    dbg('alarm: keepalive (port=' + (!!nativePort) + ')');
     getCfg().then(function (cfg) { if (cfg.source === 'native' && !nativePort) connectNative(); });
   }
 });
@@ -133,11 +149,11 @@ api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     });
     return;
   }
-  if (msg.type === 'otp:reconfigure') { applySource(); return; }
+  if (msg.type === 'otp:reconfigure') { dbg('reconfigure msg'); applySource(); return; }
 });
 
 api.storage.onChanged.addListener(function (changes, area) {
-  if (area === 'local' && changes.otpConfig) applySource();
+  if (area === 'local' && changes.otpConfig) { dbg('storage: otpConfig changed'); applySource(); }
 });
 
 api.notifications.onClicked && api.notifications.onClicked.addListener(function (id) {
@@ -145,4 +161,5 @@ api.notifications.onClicked && api.notifications.onClicked.addListener(function 
 });
 
 // Initial setup on SW start.
+dbg('SW start');
 applySource();
