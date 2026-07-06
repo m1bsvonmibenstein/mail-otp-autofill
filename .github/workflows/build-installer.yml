@@ -36,3 +36,41 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: installer/Output/MailOtpAutofill-Setup.exe
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # One MV3 source tree serves both browsers. Chrome uses manifest.key to
+      # pin the extension ID; Firefox rejects that field, so strip it there.
+      - name: Package Chrome zip
+        run: |
+          cd extension
+          zip -r -FS ../mail-otp-autofill-chrome.zip . -x '.ext-id.txt' '.ext-key.txt' '*.DS_Store'
+
+      - name: Package Firefox zip
+        run: |
+          mkdir -p build/firefox
+          cp -r extension/. build/firefox/
+          rm -f build/firefox/.ext-id.txt build/firefox/.ext-key.txt
+          jq 'del(.key)' extension/manifest.json > build/firefox/manifest.json
+          cd build/firefox
+          zip -r -FS "$GITHUB_WORKSPACE/mail-otp-autofill-firefox.zip" . -x '*.DS_Store'
+
+      - name: Upload extension packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: |
+            mail-otp-autofill-chrome.zip
+            mail-otp-autofill-firefox.zip
+          retention-days: 7
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mail-otp-autofill-chrome.zip
+            mail-otp-autofill-firefox.zip
