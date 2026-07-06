@@ -89,12 +89,14 @@
     shadow.appendChild(style);
   }
 
-  function showToast(code, meta) {
+  function showToast(rec) {
+    if (!rec || (!rec.code && !rec.link)) return;
     ensureHost();
     if (hideTimer) clearTimeout(hideTimer);
-    var from = (meta && meta.from) ? (meta.from.name || meta.from.email || '') : '';
-    var subj = [from, (meta && meta.subject) ? String(meta.subject) : '']
-      .filter(Boolean).join(' - ');
+    var meta = rec.meta || {};
+    var isLink = !!rec.link;
+    var from = meta.from ? (meta.from.name || meta.from.email || '') : '';
+    var subj = [from, meta.subject ? String(meta.subject) : ''].filter(Boolean).join(' - ');
     // Build with DOM APIs (no innerHTML) to satisfy extension-store review.
     function mk(tag, cls, text) {
       var e = document.createElement(tag);
@@ -105,19 +107,20 @@
     var wrap = mk('div', 'card');
 
     var hdr = mk('div', 'hdr');
-    hdr.appendChild(mk('span', 'ttl', 'Verification code'));
+    hdr.appendChild(mk('span', 'ttl', isLink ? 'Sign-in link' : 'Verification code'));
     var xBtn = mk('span', 'x', '×');
     hdr.appendChild(xBtn);
     wrap.appendChild(hdr);
 
-    wrap.appendChild(mk('div', 'code', code));
+    // For a link, show the destination host so the user can vet it before opening.
+    wrap.appendChild(isLink ? mk('div', 'host', rec.link.host) : mk('div', 'code', rec.code));
     if (subj) wrap.appendChild(mk('div', 'sub', subj));
 
     var row = mk('div', 'row');
     var copyBtn = mk('button', 'copy', 'Copy');
-    var fillBtn = mk('button', 'fill', 'Autofill');
+    var openBtn = mk('button', 'open', isLink ? 'Open link' : 'Autofill');
     row.appendChild(copyBtn);
-    row.appendChild(fillBtn);
+    row.appendChild(openBtn);
     wrap.appendChild(row);
 
     var msgEl = mk('div', 'msg');
@@ -126,12 +129,18 @@
 
     xBtn.addEventListener('click', function () { dismiss(); hide(); });
     copyBtn.addEventListener('click', function () {
-      copy(code).then(function () { flash('Copied ' + code); dismiss(); });
+      var text = isLink ? rec.link.url : rec.code;
+      copy(text).then(function () { flash(isLink ? 'Link copied' : 'Copied ' + text); dismiss(); });
     });
-    fillBtn.addEventListener('click', function () {
-      var res = autofill(code);
-      flash(res.ok ? 'Filled ✓' : res.msg);
-      if (res.ok) dismiss();
+    openBtn.addEventListener('click', function () {
+      if (isLink) {
+        api.runtime.sendMessage({ type: 'otp:open', url: rec.link.url }).catch(function () {});
+        flash('Opening'); dismiss();
+      } else {
+        var res = autofill(rec.code);
+        flash(res.ok ? 'Filled' : res.msg);
+        if (res.ok) dismiss();
+      }
     });
 
     var prev = shadow.querySelector('.card');
@@ -153,13 +162,15 @@
       '.x{cursor:pointer;opacity:.6;font-size:16px;line-height:1;padding:2px 4px}',
       '.x:hover{opacity:1}',
       '.code{font:700 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:3px;margin:4px 0 10px}',
+      '.host{font:600 15px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;margin:4px 0 10px;',
+      'word-break:break-all;color:#cdd6f4}',
       '.sub{font-size:12px;opacity:.6;margin:-6px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.row{display:flex;gap:8px}',
       'button{flex:1;cursor:pointer;border:none;border-radius:8px;padding:9px 10px;font:600 13px system-ui;',
       'transition:filter .15s}',
       'button:hover{filter:brightness(1.12)}',
       '.copy{background:#39415a;color:#fff}',
-      '.fill{background:#3f51b5;color:#fff}',
+      '.open{background:#3f51b5;color:#fff}',
       '.msg{font-size:12px;opacity:.85;margin-top:8px;min-height:0}'
     ].join('');
   }
@@ -172,7 +183,7 @@
   // ---- wiring --------------------------------------------------------------
   api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg) return;
-    if (msg.type === 'otp:show') { showToast(msg.code, msg.meta); }
+    if (msg.type === 'otp:show') { showToast({ code: msg.code, link: msg.link, meta: msg.meta }); }
     if (msg.type === 'otp:autofill') {
       var res = autofill(msg.code);
       if (sendResponse) sendResponse(res);
@@ -187,7 +198,7 @@
   // Auto-reshow on focus, but not once the code has been used/dismissed.
   function askLatest() {
     api.runtime.sendMessage({ type: 'otp:getLatest' }).then(function (rec) {
-      if (rec && rec.code && !rec.dismissed) showToast(rec.code, rec.meta);
+      if (rec && (rec.code || rec.link) && !rec.dismissed) showToast(rec);
     }).catch(function () {});
   }
 

@@ -15,12 +15,30 @@ const WIN_H: f32 = 128.0;
 
 struct Note {
     code: String,
+    link: String,
+    host: String,
     from: String,
     subject: String,
     start: Instant,
     positioned: bool,
     styled: bool,
     copied: bool,
+}
+
+impl Note {
+    fn is_link(&self) -> bool {
+        !self.link.is_empty()
+    }
+}
+
+/// Open a URL in the default browser without pulling in a dependency.
+fn open_url(url: &str) {
+    #[cfg(windows)]
+    let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
 const WINDOW_TITLE: &str = "otp-relay-notify";
@@ -46,17 +64,23 @@ impl eframe::App for Note {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
+        let is_link = self.is_link();
         let mut close = false;
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("VERIFICATION CODE").size(11.0).weak().strong());
+                let title = if is_link { "SIGN-IN LINK" } else { "VERIFICATION CODE" };
+                ui.label(egui::RichText::new(title).size(11.0).weak().strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button(egui::RichText::new("\u{00D7}").size(18.0)).clicked() {
                         close = true;
                     }
                 });
             });
-            ui.label(egui::RichText::new(&self.code).monospace().size(30.0).strong());
+            if is_link {
+                ui.label(egui::RichText::new(&self.host).monospace().size(16.0).strong());
+            } else {
+                ui.label(egui::RichText::new(&self.code).monospace().size(30.0).strong());
+            }
             let sub = if self.from.is_empty() {
                 self.subject.clone()
             } else if self.subject.is_empty() {
@@ -69,12 +93,22 @@ impl eframe::App for Note {
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                let label = if self.copied { "Copied \u{2713}" } else { "Copy code" };
+                let label = if self.copied {
+                    "Copied \u{2713}"
+                } else if is_link {
+                    "Copy link"
+                } else {
+                    "Copy code"
+                };
                 if ui.button(label).clicked() {
                     if let Ok(mut cb) = arboard::Clipboard::new() {
-                        let _ = cb.set_text(self.code.clone());
+                        let _ = cb.set_text(if is_link { self.link.clone() } else { self.code.clone() });
                         self.copied = true;
                     }
+                }
+                if is_link && ui.button("Open").clicked() {
+                    open_url(&self.link);
+                    close = true;
                 }
             });
         });
@@ -143,6 +177,8 @@ fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let note = Note {
         code: arg(&args, "--code"),
+        link: arg(&args, "--link"),
+        host: arg(&args, "--host"),
         from: arg(&args, "--from"),
         subject: arg(&args, "--subject"),
         start: Instant::now(),

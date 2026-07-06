@@ -12,8 +12,19 @@ var DEFAULTS = {
   enabled: true
 };
 
+// The origin field must be scheme+host only: it feeds both the content-script
+// match pattern AND the poller's API base (origin + '/SOGo/so/...'). Users paste
+// the full webmail URL (often with a '/SOGo' or lowercase '/sogo' path), which
+// breaks the case-sensitive match pattern, so collapse anything to its origin.
+function normOrigin(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s;
+  try { return new URL(s).origin; } catch (e) { return s.replace(/([^/])\/.*$/, '$1').replace(/\/+$/, ''); }
+}
+
 function originPattern(origin) {
-  var o = (origin || '').trim().replace(/\/+$/, '');
+  var o = normOrigin(origin);
   return o ? o + '/*' : '';
 }
 
@@ -79,7 +90,7 @@ async function save() {
   var source = document.querySelector('input[name=source]:checked').value;
   var cfg = {
     source: source,
-    origin: document.getElementById('origin').value.trim().replace(/\/+$/, ''),
+    origin: normOrigin(document.getElementById('origin').value),
     login: document.getElementById('login').value.trim(),
     folder: document.getElementById('folder').value.trim() || DEFAULTS.folder,
     pollIntervalMs: Math.max(10, parseInt(document.getElementById('pollSec').value, 10) || 20) * 1000,

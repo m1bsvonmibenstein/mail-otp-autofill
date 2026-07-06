@@ -7,6 +7,16 @@
   'use strict';
   var api = (typeof browser !== 'undefined') ? browser : chrome;
   var findCode = (self.OTP && self.OTP.findCode) || function () { return null; };
+  var findLink = (self.OTP && self.OTP.findLink) || function () { return null; };
+  var findLinkInHtml = (self.OTP && self.OTP.findLinkInHtml) || function () { return null; };
+
+  // Scheme+host only; base() appends '/SOGo/so/...', so a stored path would 404.
+  function normOrigin(s) {
+    s = (s || '').trim();
+    if (!s) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s;
+    try { return new URL(s).origin; } catch (e) { return s.replace(/([^/])\/.*$/, '$1').replace(/\/+$/, ''); }
+  }
 
   var DEFAULTS = {
     origin: location.origin,
@@ -61,6 +71,23 @@
     return (j && j.content) || '';
   }
 
+  // HTML body via SOGo's /view (JSON with a nested parts tree). Collect the
+  // string `content` fields that actually hold links; skip base64 image parts.
+  async function bodyHtml(uid) {
+    var r = await fetch(base() + '/' + uid + '/view', { credentials: 'include' });
+    if (!r.ok) return '';
+    var j = await r.json();
+    var out = [];
+    (function walk(node) {
+      if (!node) return;
+      if (Array.isArray(node)) { for (var i = 0; i < node.length; i++) walk(node[i]); return; }
+      if (typeof node !== 'object') return;
+      if (typeof node.content === 'string' && /https?:|href=/i.test(node.content)) out.push(node.content);
+      for (var k in node) { var v = node[k]; if (v && typeof v === 'object') walk(v); }
+    })(j && j.parts);
+    return out.join('\n');
+  }
+
   function markUnread(uid) {
     fetch(base() + '/' + uid + '/markMessageUnread', { credentials: 'include' }).catch(function () {});
   }
@@ -91,17 +118,27 @@
       var m = fresh[i];
       seen[m.uid] = true;
       var code = findCode(m.subject);
+      var link = null;
       if (!code) {
         try {
           var txt = await bodyText(m.uid);
           code = findCode(txt);
+          // A message is normally a code OR a magic link, so only look for a
+          // link once the code path comes up empty.
+          if (!code) link = findLink(txt);
+          // HTML-only mail: the raw URL never survives plaintext conversion, so
+          // fetch the HTML body and pull the sign-in anchor's href.
+          if (!code && !link) {
+            link = findLinkInHtml(await bodyHtml(m.uid));
+          }
           if (cfg.restoreUnread && m.isRead === 0) markUnread(m.uid);
         } catch (e) { /* ignore this message */ }
       }
-      if (code) {
+      if (code || link) {
         api.runtime.sendMessage({
           type: 'otp:new',
-          code: code,
+          code: code || null,
+          link: link || null,
           meta: { uid: m.uid, subject: m.subject, from: m.from, ts: Date.now() }
         });
       }
@@ -118,7 +155,7 @@
 
   api.storage.local.get(['otpConfig', 'otpWatermark']).then(function (o) {
     cfg = Object.assign({}, DEFAULTS, (o && o.otpConfig) || {});
-    if (!cfg.origin) cfg.origin = location.origin;
+    cfg.origin = normOrigin(cfg.origin) || location.origin;
     if (typeof o.otpWatermark === 'number') lastMaxUid = o.otpWatermark;
     start();
   });
@@ -127,7 +164,7 @@
   api.storage.onChanged.addListener(function (changes, area) {
     if (area === 'local' && changes.otpConfig) {
       cfg = Object.assign({}, DEFAULTS, changes.otpConfig.newValue || {});
-      if (!cfg.origin) cfg.origin = location.origin;
+      cfg.origin = normOrigin(cfg.origin) || location.origin;
       start();
     }
   });

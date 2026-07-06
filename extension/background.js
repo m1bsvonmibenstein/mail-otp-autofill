@@ -5,6 +5,16 @@ var api = (typeof browser !== 'undefined') ? browser : chrome;
 
 var NATIVE_HOST = 'com.mibs.otp_relay';
 var POLLER_ID = 'webmail-poller';
+
+// Scheme+host only. Feeds the content-script match pattern; a pasted path (esp.
+// a lowercase '/sogo' that won't match the real '/SOGo') would otherwise stop
+// the poller from ever injecting.
+function normOrigin(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s;
+  try { return new URL(s).origin; } catch (e) { return s.replace(/([^/])\/.*$/, '$1').replace(/\/+$/, ''); }
+}
 var DEFAULTS = {
   source: 'tab',              // 'tab' | 'native'
   origin: '',                 // webmail origin, e.g. https://mail.example.com
@@ -38,18 +48,22 @@ async function getLatest() {
 
 async function handleNew(msg) {
   var cfg = await getCfg();
-  if (!msg || !msg.code) return;
-  var rec = { code: msg.code, meta: msg.meta || {}, ts: Date.now() };
+  if (!msg || (!msg.code && !msg.link)) return;
+  var rec = { code: msg.code || null, link: msg.link || null, meta: msg.meta || {}, ts: Date.now() };
   await api.storage.local.set({ otpLatest: rec });
 
   if (cfg.notify) {
+    var from = rec.meta.from && rec.meta.from.name ? rec.meta.from.name + ' - ' : '';
+    var title = rec.link ? 'Sign-in link' : 'Verification code: ' + rec.code;
+    var body = rec.link
+      ? from + rec.link.host + (rec.meta.subject ? ' - ' + rec.meta.subject : '')
+      : from + (rec.meta.subject || 'New code received');
     try {
       api.notifications.create('otp-' + rec.ts, {
         type: 'basic',
         iconUrl: api.runtime.getURL('icons/icon-128.png'),
-        title: 'Verification code: ' + rec.code,
-        message: (rec.meta.from && rec.meta.from.name ? rec.meta.from.name + ' - ' : '') +
-                 (rec.meta.subject || 'New code received'),
+        title: title,
+        message: body,
         priority: 2
       });
     } catch (e) { /* notifications may be unavailable */ }
@@ -60,11 +74,18 @@ async function handleNew(msg) {
     for (var i = 0; i < tabs.length; i++) {
       if (tabs[i].id != null) {
         api.tabs.sendMessage(tabs[i].id, {
-          type: 'otp:show', code: rec.code, meta: rec.meta, ts: rec.ts
+          type: 'otp:show', code: rec.code, link: rec.link, meta: rec.meta, ts: rec.ts
         }).catch(function () {});
       }
     }
   } catch (e) { /* no receiver */ }
+}
+
+// Open a magic link in a new tab. Re-validate https here since the content
+// script (source of the URL) is the untrusted side of this boundary.
+function openLink(url) {
+  if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return;
+  try { api.tabs.create({ url: url }); } catch (e) { dbg('openLink failed: ' + e.message); }
 }
 
 // --- code source: webmail tab poller (dynamic registration) ----------------
@@ -72,7 +93,11 @@ async function syncPoller() {
   var cfg = await getCfg();
   try { await api.scripting.unregisterContentScripts({ ids: [POLLER_ID] }); } catch (e) {}
   if (cfg.source !== 'tab' || !cfg.origin) return;
-  var pattern = cfg.origin.replace(/\/+$/, '') + '/*';
+  // Collapse to scheme+host so a pasted '/SOGo' path (or lowercase '/sogo',
+  // which won't match the case-sensitive real path) can't break the pattern.
+  var origin = normOrigin(cfg.origin);
+  if (!origin) { dbg('poller: bad origin ' + cfg.origin); return; }
+  var pattern = origin + '/*';
   var granted = false;
   try { granted = await api.permissions.contains({ origins: [pattern] }); } catch (e) {}
   if (!granted) { dbg('poller: no permission for ' + pattern); return; }
@@ -101,6 +126,9 @@ function connectNative() {
   nativePort.onMessage.addListener(function (msg) {
     dbg('native recv: ' + JSON.stringify(msg));
     if (msg && msg.type === 'code' && msg.code) handleNew({ code: msg.code, meta: msg.meta });
+    if (msg && msg.type === 'link' && msg.url) {
+      handleNew({ link: { url: msg.url, host: msg.host }, meta: msg.meta });
+    }
   });
   nativePort.onDisconnect.addListener(function () {
     var err = (api.runtime.lastError && api.runtime.lastError.message) || 'no error';
@@ -137,6 +165,7 @@ api.alarms && api.alarms.onAlarm.addListener(function (a) {
 api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (!msg) return;
   if (msg.type === 'otp:new') { handleNew(msg); return; }
+  if (msg.type === 'otp:open') { openLink(msg.url); return; }
   if (msg.type === 'otp:getLatest') { getLatest().then(sendResponse); return true; }
   if (msg.type === 'otp:dismiss') {
     api.storage.local.get('otpLatest').then(function (o) {

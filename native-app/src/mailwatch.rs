@@ -7,15 +7,21 @@ use crate::otp;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-pub struct CodeEvent {
-    pub code: String,
+/// What a message yielded: a verification code, or a magic sign-in link.
+pub enum Payload {
+    Code(String),
+    Link { url: String, host: String },
+}
+
+pub struct MailEvent {
+    pub payload: Payload,
     pub account: String,
     pub from_name: String,
     pub from_email: String,
     pub subject: String,
 }
 
-pub fn watch<F: Fn(&str)>(account: Account, password: String, tx: Sender<CodeEvent>, log: F) {
+pub fn watch<F: Fn(&str)>(account: Account, password: String, tx: Sender<MailEvent>, log: F) {
     loop {
         if let Err(e) = run_once(&account, &password, &tx, &log) {
             log(&format!("[{}] error: {}", account.label, e));
@@ -27,7 +33,7 @@ pub fn watch<F: Fn(&str)>(account: Account, password: String, tx: Sender<CodeEve
 fn run_once<F: Fn(&str)>(
     account: &Account,
     password: &str,
-    tx: &Sender<CodeEvent>,
+    tx: &Sender<MailEvent>,
     log: &F,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let tls = native_tls::TlsConnector::builder().build()?;
@@ -53,7 +59,8 @@ fn run_once<F: Fn(&str)>(
             for f in fetches.iter() {
                 if let Some(body) = f.body() {
                     if let Some(ev) = extract(account, body) {
-                        log(&format!("[{}] code in uid {}", account.label, uid));
+                        let kind = match ev.payload { Payload::Code(_) => "code", Payload::Link { .. } => "link" };
+                        log(&format!("[{}] {} in uid {}", account.label, kind, uid));
                         let _ = tx.send(ev);
                     }
                 }
@@ -73,7 +80,7 @@ pub fn check_connection(account: &Account, password: &str) -> Result<u32, Box<dy
     Ok(mb.exists)
 }
 
-fn extract(account: &Account, raw: &[u8]) -> Option<CodeEvent> {
+fn extract(account: &Account, raw: &[u8]) -> Option<MailEvent> {
     let msg = mail_parser::MessageParser::default().parse(raw)?;
     let subject = msg.subject().unwrap_or("").to_string();
     let (from_name, from_email) = msg
@@ -87,19 +94,33 @@ fn extract(account: &Account, raw: &[u8]) -> Option<CodeEvent> {
         })
         .unwrap_or_default();
 
+    let text_body = msg.body_text(0).map(|c| c.into_owned()).unwrap_or_default();
+    let html_body = msg.body_html(0).map(|c| c.into_owned());
+
+    // Code first, over subject + text + stripped HTML (matches previous behaviour).
     let mut hay = subject.clone();
     hay.push('\n');
-    if let Some(t) = msg.body_text(0) {
-        hay.push_str(&t);
-    }
-    if let Some(h) = msg.body_html(0) {
+    hay.push_str(&text_body);
+    if let Some(h) = &html_body {
         hay.push('\n');
-        hay.push_str(&strip_html(&h));
+        hay.push_str(&strip_html(h));
     }
 
-    let code = otp::find_code(&hay)?;
-    Some(CodeEvent {
-        code,
+    let payload = if let Some(code) = otp::find_code(&hay) {
+        Payload::Code(code)
+    } else {
+        // Magic link: plaintext (subject + text) first, HTML anchors as fallback
+        // for mail whose URL only survives inside an <a href>.
+        let mut link_hay = subject.clone();
+        link_hay.push('\n');
+        link_hay.push_str(&text_body);
+        let link = otp::find_link(&link_hay)
+            .or_else(|| html_body.as_deref().and_then(otp::find_link_in_html))?;
+        Payload::Link { url: link.url, host: link.host }
+    };
+
+    Some(MailEvent {
+        payload,
         account: account.label.clone(),
         from_name,
         from_email,

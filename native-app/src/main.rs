@@ -72,7 +72,7 @@ fn run_host() {
     log("host start");
     let cfg = config::load();
     let stdout = Arc::new(Mutex::new(io::stdout()));
-    let (tx, rx) = mpsc::channel::<mailwatch::CodeEvent>();
+    let (tx, rx) = mpsc::channel::<mailwatch::MailEvent>();
 
     let _ = write_message(&stdout, br#"{"type":"hello"}"#);
 
@@ -95,15 +95,19 @@ fn run_host() {
     let stdout_w = stdout.clone();
     std::thread::spawn(move || {
         for ev in rx {
-            let payload = serde_json::json!({
-                "type": "code",
-                "code": ev.code,
-                "meta": {
-                    "account": ev.account,
-                    "subject": ev.subject,
-                    "from": { "name": ev.from_name, "email": ev.from_email }
-                }
+            let meta = serde_json::json!({
+                "account": ev.account,
+                "subject": ev.subject,
+                "from": { "name": ev.from_name, "email": ev.from_email }
             });
+            let payload = match &ev.payload {
+                mailwatch::Payload::Code(code) => {
+                    serde_json::json!({ "type": "code", "code": code, "meta": meta })
+                }
+                mailwatch::Payload::Link { url, host } => {
+                    serde_json::json!({ "type": "link", "url": url, "host": host, "meta": meta })
+                }
+            };
             let _ = write_message(&stdout_w, payload.to_string().as_bytes());
         }
     });

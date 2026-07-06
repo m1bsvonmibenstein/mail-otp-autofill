@@ -3,7 +3,7 @@
 ; this with ISCC.exe to produce Output\MailOtpAutofill-Setup.exe.
 
 #define MyAppName "Mail OTP Autofill"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "0.4.0"
 #define ChromeExtId "bleebkmhbndbppdebamiidfilopenokn"
 #define FirefoxExtId "mail-otp-autofill@mibs"
 #define SrcBin "..\native-app\target\release"

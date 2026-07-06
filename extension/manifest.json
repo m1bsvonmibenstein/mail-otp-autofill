@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Mail OTP Autofill",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Surfaces verification codes from your webmail (mailcow/SOGo, and more) and offers one-click copy + autofill on any site.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu2cz/hHs4VVfDzvcfl/GamiGGlfpjMb8B3AU/bpeLXEVOJV9xFb2qu2JzRJGGeQfl2Z9vuSz0FOCMuAlEhBKIkRG6B3ueqaGeWQQCyh+tFFPiqCTZijc7BIdhTa+x82LZr8cu7CRQg5d+Csi47ROuUmwR5gWez/nPV7UZhFIaSoatc1ndnAgAuwkiZGlm9LycmUCJOYm2Z5P7aGgqK4sHzyfStP6ExROLK6tlP2yVCbE47cDzQZyzeYRfOJks/MiOEpPqKpnxaSVn92xXW/o9ZRryYuhAL2mzhBLEjttRjXw7y/5OZmUkMxqqfMhYG/mAg5ZeZqG+cF+lvuLWL87BwIDAQAB",
-  "permissions": ["storage", "notifications", "tabs", "scripting", "nativeMessaging", "alarms"],
+  "permissions": ["storage", "notifications", "scripting", "nativeMessaging", "alarms"],
   "optional_host_permissions": ["*://*/*"],
   "background": { "service_worker": "background.js", "scripts": ["background.js"] },
   "action": {

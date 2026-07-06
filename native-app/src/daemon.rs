@@ -57,7 +57,7 @@ fn main() {
     let latest: Latest = Arc::new(Mutex::new(None));
 
     // Spawn one IMAP watcher per account; they feed codes into a channel.
-    let (tx, rx) = std::sync::mpsc::channel::<mailwatch::CodeEvent>();
+    let (tx, rx) = std::sync::mpsc::channel::<mailwatch::MailEvent>();
     let mut watched = 0;
     for acct in cfg.accounts {
         match config::get_password(&acct.label) {
@@ -81,17 +81,24 @@ fn main() {
         let latest = latest.clone();
         std::thread::spawn(move || {
             for ev in rx {
-                let frame = serde_json::json!({
-                    "type": "code",
-                    "code": ev.code,
-                    "meta": {
-                        "account": ev.account,
-                        "subject": ev.subject,
-                        "from": { "name": ev.from_name, "email": ev.from_email }
-                    }
-                })
-                .to_string()
-                .into_bytes();
+                let meta = serde_json::json!({
+                    "account": ev.account,
+                    "subject": ev.subject,
+                    "from": { "name": ev.from_name, "email": ev.from_email }
+                });
+                let (frame_json, log_line, clip) = match &ev.payload {
+                    mailwatch::Payload::Code(code) => (
+                        serde_json::json!({ "type": "code", "code": code, "meta": meta }),
+                        format!("code {}", code),
+                        code.clone(),
+                    ),
+                    mailwatch::Payload::Link { url, host } => (
+                        serde_json::json!({ "type": "link", "url": url, "host": host, "meta": meta }),
+                        format!("link {}", host),
+                        url.clone(),
+                    ),
+                };
+                let frame = frame_json.to_string().into_bytes();
 
                 *latest.lock().unwrap() = Some(Held { frame: frame.clone(), at: Instant::now() });
 
@@ -101,14 +108,14 @@ fn main() {
                         let mut s = c.lock().unwrap();
                         ipc::write_frame(&mut *s, &frame).is_ok()
                     });
-                    log("daemon", &format!("code {} -> {} client(s)", ev.code, g.len()));
+                    log("daemon", &format!("{} -> {} client(s)", log_line, g.len()));
                 }
 
                 if notify_on {
                     spawn_notifier(&ev);
                 }
                 if auto_copy {
-                    if let Err(e) = set_clipboard(&ev.code) {
+                    if let Err(e) = set_clipboard(&clip) {
                         log("daemon", &format!("clipboard error: {}", e));
                     }
                 }
@@ -138,16 +145,19 @@ fn main() {
     }
 }
 
-/// Spawn the custom notification popup (sibling exe) for a new code.
-fn spawn_notifier(ev: &mailwatch::CodeEvent) {
+/// Spawn the custom notification popup (sibling exe) for a new code or link.
+fn spawn_notifier(ev: &mailwatch::MailEvent) {
     let name = if cfg!(windows) { "otp-relay-notify.exe" } else { "otp-relay-notify" };
     let exe = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(name)));
     if let Some(exe) = exe {
-        let _ = std::process::Command::new(exe)
-            .arg("--code")
-            .arg(&ev.code)
+        let mut cmd = std::process::Command::new(exe);
+        match &ev.payload {
+            mailwatch::Payload::Code(code) => { cmd.arg("--code").arg(code); }
+            mailwatch::Payload::Link { url, host } => { cmd.arg("--link").arg(url).arg("--host").arg(host); }
+        }
+        let _ = cmd
             .arg("--from")
             .arg(&ev.from_name)
             .arg("--subject")
