@@ -215,8 +215,14 @@ impl eframe::App for GuiApp {
 }
 
 fn main() -> eframe::Result<()> {
+    let mut viewport = egui::ViewportBuilder::default().with_inner_size([560.0, 560.0]);
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!(
+        "../../extension/icons/icon-128.png"
+    )) {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([560.0, 560.0]),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(
