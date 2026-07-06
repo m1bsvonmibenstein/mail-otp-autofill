@@ -30,6 +30,14 @@ fn main() {
     };
     log("bridge", "connected to daemon");
 
+    // Greet the extension immediately so it can confirm the native path is live
+    // (the daemon only pushes on new mail, so without this an idle connect - and
+    // the options "Test native app" button - would just time out).
+    {
+        let mut o = io::stdout();
+        let _ = ipc::write_frame(&mut o, br#"{"type":"hello"}"#);
+    }
+
     // Exit when the browser closes the port (stdin EOF).
     std::thread::spawn(|| {
         let mut stdin = io::stdin().lock();

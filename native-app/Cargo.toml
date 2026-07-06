@@ -1,6 +1,6 @@
 [package]
 name = "otp-relay"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Local native-messaging host that watches IMAP mailboxes (IDLE) and pushes verification codes to the Mail OTP Autofill browser extension, plus a GUI account manager."
 
