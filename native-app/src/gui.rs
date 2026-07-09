@@ -22,6 +22,7 @@ struct GuiApp {
     status: String,
     notify: bool,
     auto_copy: bool,
+    poll_secs: String,
     results: Results,
 }
 
@@ -38,6 +39,7 @@ impl GuiApp {
             status: String::new(),
             notify: cfg.notify,
             auto_copy: cfg.auto_copy,
+            poll_secs: cfg.poll_secs.to_string(),
             results: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -50,6 +52,9 @@ impl GuiApp {
         let mut cfg = config::load();
         cfg.notify = self.notify;
         cfg.auto_copy = self.auto_copy;
+        if let Ok(v) = self.poll_secs.trim().parse::<u64>() {
+            cfg.poll_secs = v.clamp(config::MIN_POLL_SECS, config::MAX_POLL_SECS);
+        }
         let _ = config::save(&cfg);
     }
 
@@ -82,6 +87,13 @@ impl GuiApp {
         self.reload();
     }
 
+    fn reload_daemon(&mut self) {
+        match restart_daemon() {
+            Ok(_) => self.status = "Daemon reloaded - now watching the current accounts and settings.".into(),
+            Err(e) => self.status = format!("Daemon reload failed: {}", e),
+        }
+    }
+
     fn remove_account(&mut self, label: &str) {
         let mut cfg = config::load();
         cfg.accounts.retain(|a| a.label != label);
@@ -112,8 +124,10 @@ impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut to_remove: Option<String> = None;
         let mut to_test: Option<Account> = None;
+        let mut do_reload = false;
 
         egui::CentralPanel::default().show(ctx, |ui| {
+          egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.heading("Mail OTP Autofill - accounts");
             ui.label("IMAP mailboxes the native app watches. App passwords are kept in the OS keychain.");
             ui.add_space(6.0);
@@ -193,13 +207,31 @@ impl eframe::App for GuiApp {
             if ui.checkbox(&mut self.auto_copy, "Auto-copy the code to the clipboard").changed() {
                 self.save_settings();
             }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("Re-check inbox every");
+                if ui.add(egui::TextEdit::singleline(&mut self.poll_secs).desired_width(46.0)).changed() {
+                    self.save_settings();
+                }
+                ui.label("seconds");
+            });
+            ui.small(format!(
+                "Safety re-check only - new mail still arrives instantly via IMAP IDLE. Clamped to {}-{}s.",
+                config::MIN_POLL_SECS, config::MAX_POLL_SECS
+            ));
             ui.small("Applied by the background daemon; changes take effect on its next start.");
+            ui.add_space(6.0);
+            if ui.button("Reload daemon now").clicked() {
+                do_reload = true;
+            }
+            ui.small("Restarts the background watcher so account and settings changes apply immediately.");
 
             if !self.status.is_empty() {
                 ui.add_space(6.0);
                 ui.separator();
                 ui.label(&self.status);
             }
+          });
         });
 
         if let Some(label) = to_remove {
@@ -208,10 +240,56 @@ impl eframe::App for GuiApp {
         if let Some(account) = to_test {
             self.start_test(account);
         }
+        if do_reload {
+            self.reload_daemon();
+        }
 
         // Keep repainting while a test runs so results appear promptly.
         ctx.request_repaint_after(std::time::Duration::from_millis(400));
     }
+}
+
+/// Path to the daemon binary, expected next to this GUI exe (installed together).
+fn daemon_exe() -> Option<std::path::PathBuf> {
+    let name = if cfg!(windows) { "otp-relay-daemon.exe" } else { "otp-relay-daemon" };
+    std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join(name)))
+}
+
+#[cfg(windows)]
+fn kill_daemon() {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/IM", "otp-relay-daemon.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+}
+
+#[cfg(not(windows))]
+fn kill_daemon() {
+    let _ = std::process::Command::new("pkill").arg("-f").arg("otp-relay-daemon").output();
+}
+
+/// Kill any running daemon and start a fresh one from the install dir. A short
+/// pause lets the OS release the single-instance socket before the new daemon
+/// tries to bind it.
+fn restart_daemon() -> Result<(), String> {
+    let exe = daemon_exe().ok_or("could not resolve daemon path")?;
+    if !exe.exists() {
+        return Err(format!("daemon not found at {}", exe.display()));
+    }
+    kill_daemon();
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    let mut cmd = std::process::Command::new(&exe);
+    // The daemon is a console-subsystem binary; without this flag spawning it
+    // directly pops a console window. (Autostart launches it hidden via VBS.)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 fn main() -> eframe::Result<()> {

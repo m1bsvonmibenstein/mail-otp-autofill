@@ -81,9 +81,8 @@ with `BODY.PEEK`, so they are never marked read.
 - [x] **Native app: auto copy to clipboard** - optionally copy the code the instant it arrives (toggle in the GUI).
 - [x] **Native app: desktop notifications** - OS-level notification from the daemon, independent of the browser (Windows may need an AppUserModelID to display).
 - [x] **Gmail / Outlook / iCloud** - via IMAP + app password in native mode (GUI presets).
-- [ ] **Gmail tab adapter** - content-script source for the open Gmail tab (only needed for tab mode, no OAuth).
-- [ ] **Signed builds** - code-sign the native binary (Windows) and notarize (macOS) to drop install warnings.
-- [ ] **Store listings** - Chrome Web Store + Firefox AMO + Edge/Opera.
+- [x] **Gmail tab adapter** - content-script source for the open Gmail tab (only needed for tab mode, no OAuth).
+- [x] **Store listings** - Chrome Web Store + Firefox AMO + Edge/Opera.
 
 ## Layout
 

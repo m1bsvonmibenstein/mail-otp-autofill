@@ -21,9 +21,9 @@ pub struct MailEvent {
     pub subject: String,
 }
 
-pub fn watch<F: Fn(&str)>(account: Account, password: String, tx: Sender<MailEvent>, log: F) {
+pub fn watch<F: Fn(&str)>(account: Account, password: String, poll: Duration, tx: Sender<MailEvent>, log: F) {
     loop {
-        if let Err(e) = run_once(&account, &password, &tx, &log) {
+        if let Err(e) = run_once(&account, &password, poll, &tx, &log) {
             log(&format!("[{}] error: {}", account.label, e));
         }
         std::thread::sleep(Duration::from_secs(15));
@@ -33,6 +33,7 @@ pub fn watch<F: Fn(&str)>(account: Account, password: String, tx: Sender<MailEve
 fn run_once<F: Fn(&str)>(
     account: &Account,
     password: &str,
+    poll: Duration,
     tx: &Sender<MailEvent>,
     log: &F,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,9 +47,10 @@ fn run_once<F: Fn(&str)>(
     let mut last_seen: u32 = mailbox.uid_next.map(|n| n.saturating_sub(1)).unwrap_or(0);
 
     loop {
-        // Block until the server reports activity (new mail), re-issuing IDLE
-        // periodically so the connection stays fresh.
-        session.idle()?.wait_keepalive()?;
+        // Block until the server reports activity (new mail), or until the poll
+        // interval elapses. New mail still wakes us instantly; the timeout is a
+        // safety re-check in case IDLE silently stalls. Either wake re-scans.
+        let _ = session.idle()?.wait_with_timeout(poll)?;
 
         let uids = session.uid_search(format!("UID {}:*", last_seen + 1))?;
         let mut fresh: Vec<u32> = uids.into_iter().filter(|&u| u > last_seen).collect();

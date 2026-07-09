@@ -71,6 +71,7 @@ fn main() {
 fn run_host() {
     log("host start");
     let cfg = config::load();
+    let poll = cfg.poll_interval();
     let stdout = Arc::new(Mutex::new(io::stdout()));
     let (tx, rx) = mpsc::channel::<mailwatch::MailEvent>();
 
@@ -82,7 +83,7 @@ fn run_host() {
                 let txc = tx.clone();
                 let label = acct.label.clone();
                 std::thread::spawn(move || {
-                    mailwatch::watch(acct, pw, txc, |m| log(m));
+                    mailwatch::watch(acct, pw, poll, txc, |m| log(m));
                 });
                 log(&format!("watching {}", label));
             }

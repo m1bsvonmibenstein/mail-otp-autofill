@@ -52,6 +52,8 @@ fn main() {
     let cfg = config::load();
     let notify_on = cfg.notify;
     let auto_copy = cfg.auto_copy;
+    let poll = cfg.poll_interval();
+    log("daemon", &format!("inbox re-check every {}s", poll.as_secs()));
 
     let clients: Clients = Arc::new(Mutex::new(Vec::new()));
     let latest: Latest = Arc::new(Mutex::new(None));
@@ -63,7 +65,7 @@ fn main() {
         match config::get_password(&acct.label) {
             Ok(pw) => {
                 let txc = tx.clone();
-                std::thread::spawn(move || mailwatch::watch(acct, pw, txc, |m| log("imap", m)));
+                std::thread::spawn(move || mailwatch::watch(acct, pw, poll, txc, |m| log("imap", m)));
                 watched += 1;
             }
             Err(e) => log("daemon", &format!("no password for {}: {}", acct.label, e)),
@@ -157,12 +159,12 @@ fn spawn_notifier(ev: &mailwatch::MailEvent) {
             mailwatch::Payload::Code(code) => { cmd.arg("--code").arg(code); }
             mailwatch::Payload::Link { url, host } => { cmd.arg("--link").arg(url).arg("--host").arg(host); }
         }
-        let _ = cmd
-            .arg("--from")
-            .arg(&ev.from_name)
-            .arg("--subject")
-            .arg(&ev.subject)
-            .spawn();
+        match cmd.arg("--from").arg(&ev.from_name).arg("--subject").arg(&ev.subject).spawn() {
+            Ok(_) => log("daemon", &format!("notifier spawned for {}", ev.account)),
+            Err(e) => log("daemon", &format!("notifier spawn FAILED for {}: {}", ev.account, e)),
+        }
+    } else {
+        log("daemon", "notifier path unresolved (current_exe/parent missing)");
     }
 }
 

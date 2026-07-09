@@ -7,8 +7,14 @@
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub const KEYRING_SERVICE: &str = "com.mibs.otp_relay";
+
+/// Bounds for the inbox re-check interval (seconds). IDLE still delivers new
+/// mail instantly; a too-small value only churns the connection.
+pub const MIN_POLL_SECS: u64 = 10;
+pub const MAX_POLL_SECS: u64 = 1800;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
@@ -27,6 +33,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_poll_secs() -> u64 {
+    60
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -37,11 +47,22 @@ pub struct Config {
     /// Automatically copy the code to the clipboard the instant it arrives.
     #[serde(default)]
     pub auto_copy: bool,
+    /// How often (seconds) each watcher breaks IDLE to re-scan the inbox as a
+    /// safety net if IDLE stalls. Clamped to [MIN_POLL_SECS, MAX_POLL_SECS].
+    #[serde(default = "default_poll_secs")]
+    pub poll_secs: u64,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { accounts: Vec::new(), notify: true, auto_copy: false }
+        Config { accounts: Vec::new(), notify: true, auto_copy: false, poll_secs: default_poll_secs() }
+    }
+}
+
+impl Config {
+    /// Poll interval as a clamped Duration used by the IMAP watchers.
+    pub fn poll_interval(&self) -> Duration {
+        Duration::from_secs(self.poll_secs.clamp(MIN_POLL_SECS, MAX_POLL_SECS))
     }
 }
 
