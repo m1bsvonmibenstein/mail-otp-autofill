@@ -8,13 +8,52 @@
   // Keyword must sit near the token, or we'd grab order numbers / dates / phones.
   var KEYWORDS = /(one[\s-]?time|verification|verify|security|passcode|pass\s?code|access\s?code|confirmation|auth(?:entication)?|login|sign[\s-]?in|OTP|2FA|MFA|\bcode\b)/i;
   var TOKEN = /\b([0-9]{3}[\s-]?[0-9]{3}|[0-9]{4,8}|[A-Z0-9]{6,8})\b/;
+  // Iteration copies (global) + phone-rejection patterns, kept in sync with otp.rs.
+  var KW_G = new RegExp(KEYWORDS.source, 'ig');
+  var TOKEN_G = new RegExp(TOKEN.source, 'g');
+  var PHONE_WORDS = /(?:call|phone|tel|dial|contact|text\s+us|\bsms\b|fax|mobile|hotline|help\s?line|toll[\s.\-]?free|whats\s?app)\b/i;
+  var PHONE_SHAPE = /(?:\+\d{1,3}[\s.\-]*)?\(?\d{3}\)?[\s.\-]+\d{3}[\s.\-]+\d{4}|1[\s.\-]?\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g;
 
   function normalize(s) { return (s || '').replace(/[\s-]/g, ''); }
+
+  // URLs / emails are removed before code scanning (embedded UUIDs, tracking ids
+  // and path keywords like "/verification/" are a major false-positive source).
+  // Links are still handled separately by findLink. Kept in sync with otp.rs.
+  var URL_EMAIL = /https?:\/\/\S+|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/ig;
+  function stripUrls(text) { return (text || '').replace(URL_EMAIL, ' '); }
+
+  // True if the token at [start,end) in ctx is part of a phone number.
+  function isPhone(ctx, start, end) {
+    var before = ctx.slice(Math.max(0, start - 25), start);
+    if (PHONE_WORDS.test(before)) return true;
+    PHONE_SHAPE.lastIndex = 0;
+    var pm;
+    while ((pm = PHONE_SHAPE.exec(ctx)) !== null) {
+      var ps = pm.index, pe = pm.index + pm[0].length;
+      if (ps < end && start < pe) return true;
+      if (pm.index === PHONE_SHAPE.lastIndex) PHONE_SHAPE.lastIndex++;
+    }
+    return false;
+  }
+
+  // First token in s that has a digit (so all-caps words can't match the alnum
+  // branch) and is not part of a phone number. Iterates so a phone can't shadow
+  // a later code.
+  function firstValid(s) {
+    TOKEN_G.lastIndex = 0;
+    var m;
+    while ((m = TOKEN_G.exec(s)) !== null) {
+      var t = m[1], start = m.index, end = m.index + m[0].length;
+      if (/[0-9]/.test(t) && !isPhone(s, start, end)) return normalize(t);
+      if (m.index === TOKEN_G.lastIndex) TOKEN_G.lastIndex++;
+    }
+    return null;
+  }
 
   // Magic sign-in links: an https URL sitting near a login/verify keyword.
   // Proximity keeps footer/unsubscribe/social links from being surfaced, and a
   // small denylist drops the obvious non-auth links that slip through.
-  var LINK_KEYWORDS = /(magic\s?link|sign[\s-]?in|log[\s-]?in|verify|confirm(?:ation)?|activate|authenticat|one[\s-]?time|access\s+your|complete\s+your|finish\s+(?:signing|sign)|continue\s+to\s+(?:sign|log))/i;
+  var LINK_KEYWORDS = /(magic\s?link|passwordless|sign[\s-]?in|log[\s-]?in|finish\s+(?:signing|sign)|continue\s+to\s+(?:sign|log)|one[\s-]?time\s+(?:sign|log|link))/i;
   var LINK_DENY = /(unsubscribe|unsub\b|opt[\s-]?out|list-manage|list-unsubscribe|\/preferences|email[\s-]?settings|manage[\s-]?(?:your[\s-]?)?preferences)/i;
   var URL_RE = /https:\/\/[^\s<>"'`\)\]]+/ig;
 
@@ -42,22 +81,27 @@
 
   function findCode(text) {
     if (!text) return null;
-    var lines = text.split(/\n+/), best = null, i, j;
+    text = stripUrls(text);
+    var lines = text.split(/\n+/), i, j, c;
     for (i = 0; i < lines.length; i++) {
       if (!KEYWORDS.test(lines[i])) continue;
-      var m = lines[i].match(TOKEN);
-      if (m) { best = normalize(m[1]); break; }
+      c = firstValid(lines[i]);
+      if (c) return c;
       for (j = 1; j <= 2 && i + j < lines.length; j++) {
-        var m2 = lines[i + j].match(TOKEN);
-        if (m2) { best = normalize(m2[1]); break; }
+        c = firstValid(lines[i + j]);
+        if (c) return c;
       }
-      if (best) break;
     }
-    if (!best) {
-      var win = text.match(new RegExp(KEYWORDS.source + '[^0-9A-Za-z]{0,40}' + TOKEN.source, 'i'));
-      if (win) { var mm = win[0].match(TOKEN); if (mm) best = normalize(mm[1]); }
+    // Fallback: a token within ~60 chars after any keyword occurrence.
+    KW_G.lastIndex = 0;
+    var km;
+    while ((km = KW_G.exec(text)) !== null) {
+      var end = km.index + km[0].length;
+      c = firstValid(text.slice(end, end + 60));
+      if (c) return c;
+      if (km.index === KW_G.lastIndex) KW_G.lastIndex++;
     }
-    return best;
+    return null;
   }
 
   // HTML fallback: many magic-link mails are HTML-only, so SOGo's plaintext

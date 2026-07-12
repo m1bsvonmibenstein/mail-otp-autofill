@@ -17,8 +17,64 @@ fn token() -> &'static Regex {
     TOK.get_or_init(|| Regex::new(r"\b([0-9]{3}[\s-]?[0-9]{3}|[0-9]{4,8}|[A-Z0-9]{6,8})\b").unwrap())
 }
 
+// Words that, sitting just before a number, mark it as a phone / support line.
+fn phone_words() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"(?i)(?:call|phone|tel|dial|contact|text\s+us|\bsms\b|fax|mobile|hotline|help\s?line|toll[\s.\-]?free|whats\s?app)\b").unwrap()
+    })
+}
+
+// Separator-formatted phone numbers (bare 10+ digit runs can't leak a token
+// because the token \b…\b boundaries fail on runs longer than 8).
+fn phone_shape() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"(?:\+\d{1,3}[\s.\-]*)?\(?\d{3}\)?[\s.\-]+\d{3}[\s.\-]+\d{4}|1[\s.\-]?\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}").unwrap()
+    })
+}
+
+/// True if the token at [start,end) in `ctx` is part of a phone number: a phone
+/// word within ~25 chars before it, or overlap with a phone-shaped run.
+fn is_phone(ctx: &str, start: usize, end: usize) -> bool {
+    let ws = start.saturating_sub(25);
+    let before = safe_slice(ctx, ws, start - ws);
+    if phone_words().is_match(before) {
+        return true;
+    }
+    phone_shape().find_iter(ctx).any(|pm| pm.start() < end && start < pm.end())
+}
+
+/// First token in `s` that is a plausible code: has at least one digit (so an
+/// all-caps word can't match the alnum branch) and is not part of a phone
+/// number. Iterates so a phone earlier in the text can't shadow a later code.
+fn first_valid(s: &str) -> Option<String> {
+    for m in token().find_iter(s) {
+        let t = m.as_str();
+        if !t.bytes().any(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        if is_phone(s, m.start(), m.end()) {
+            continue;
+        }
+        return Some(normalize(t));
+    }
+    None
+}
+
 fn normalize(s: &str) -> String {
     s.chars().filter(|c| *c != ' ' && *c != '-' && *c != '\t').collect()
+}
+
+// URLs and email addresses are removed before code scanning: their embedded
+// digits (UUIDs, tracking ids) and keywords (e.g. a "/verification/" path) are a
+// major false-positive source. Links are still scanned separately by find_link.
+fn strip_urls(text: &str) -> String {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let re = R.get_or_init(|| {
+        Regex::new(r"(?i)https?://\S+|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}").unwrap()
+    });
+    re.replace_all(text, " ").into_owned()
 }
 
 /// Byte-safe substring that snaps to char boundaries.
@@ -34,8 +90,9 @@ pub fn find_code(text: &str) -> Option<String> {
     if text.is_empty() {
         return None;
     }
+    let cleaned = strip_urls(text);
+    let text = cleaned.as_str();
     let kw = keywords();
-    let tok = token();
 
     // Line-oriented: a keyword line, code on it or within the next two lines.
     let lines: Vec<&str> = text.split('\n').collect();
@@ -43,13 +100,13 @@ pub fn find_code(text: &str) -> Option<String> {
         if !kw.is_match(line) {
             continue;
         }
-        if let Some(c) = tok.captures(line) {
-            return Some(normalize(&c[1]));
+        if let Some(c) = first_valid(line) {
+            return Some(c);
         }
         for j in 1..=2 {
             if let Some(l) = lines.get(i + j) {
-                if let Some(c) = tok.captures(l) {
-                    return Some(normalize(&c[1]));
+                if let Some(c) = first_valid(l) {
+                    return Some(c);
                 }
             }
         }
@@ -58,8 +115,8 @@ pub fn find_code(text: &str) -> Option<String> {
     // Fallback: a token within ~60 chars after any keyword occurrence.
     for m in kw.find_iter(text) {
         let window = safe_slice(text, m.end(), 60);
-        if let Some(c) = tok.captures(window) {
-            return Some(normalize(&c[1]));
+        if let Some(c) = first_valid(window) {
+            return Some(c);
         }
     }
     None
@@ -78,7 +135,7 @@ pub struct Link {
 fn link_keywords() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r"(?i)(magic\s?link|sign[\s-]?in|log[\s-]?in|verify|confirm(?:ation)?|activate|authenticat|one[\s-]?time|access\s+your|complete\s+your|finish\s+(?:signing|sign)|continue\s+to\s+(?:sign|log))").unwrap()
+        Regex::new(r"(?i)(magic\s?link|passwordless|sign[\s-]?in|log[\s-]?in|finish\s+(?:signing|sign)|continue\s+to\s+(?:sign|log)|one[\s-]?time\s+(?:sign|log|link))").unwrap()
     })
 }
 
@@ -217,6 +274,44 @@ mod tests {
     }
 
     #[test]
+    fn ignores_phone_numbers_near_keywords() {
+        // Phone in a security alert must not be surfaced as a code.
+        assert_eq!(find_code("For your security, if this wasn't you call 1-800-555-1234."), None);
+        assert_eq!(find_code("We noticed a login. Call (555) 123-4567 to report it."), None);
+        assert_eq!(find_code("Verify it was you - questions? Contact us at 555.867.5309."), None);
+    }
+
+    #[test]
+    fn ignores_all_caps_words() {
+        // The alnum branch must require a digit, so plain words don't match.
+        assert_eq!(find_code("Login alert: your ACCOUNT was accessed"), None);
+        assert_eq!(find_code("Security notice: WELCOME back"), None);
+    }
+
+    #[test]
+    fn still_finds_alnum_codes() {
+        assert_eq!(find_code("Your code is A1B2C3").as_deref(), Some("A1B2C3"));
+    }
+
+    #[test]
+    fn ignores_numbers_inside_urls_and_emails() {
+        // A verification URL whose path contains "verification" and a UUID must
+        // not yield a code; nor should a copyright year with no nearby keyword.
+        let body = "Please confirm your contact email address, mibsmibby@gmail.com, by clicking:\n\
+            https://chrome.google.com/webstore/devconsole/1234d5a2-4429-43e0-9c8e-03da8b43481d/verification/AbiLaF8LSGQG\n\
+            A verified email address is required.\n\
+            © 2026 Google LLC, Mountain View, CA 94043 , USA";
+        assert_eq!(find_code(body), None);
+    }
+
+    #[test]
+    fn skips_phone_and_finds_real_code() {
+        // A phone earlier on the line must not shadow the real code after it.
+        let body = "Questions? call 800-555-1234. Verification code 908172";
+        assert_eq!(find_code(body).as_deref(), Some("908172"));
+    }
+
+    #[test]
     fn finds_plaintext_magic_link() {
         let l = find_link("Click to sign in:\nhttps://app.example.com/verify?t=abc123").unwrap();
         assert_eq!(l.host, "app.example.com");
@@ -228,6 +323,15 @@ mod tests {
         assert!(find_link("https://example.com/home").is_none());
         assert!(find_link("To sign in visit https://n.com/email-settings/login").is_none());
         assert!(find_link("Sign in here: http://insecure.example.com/login").is_none());
+    }
+
+    #[test]
+    fn rejects_confirmation_and_verify_email_links() {
+        // Account email-confirmation / "verify your email" links are not logins.
+        assert!(find_link("Please confirm your contact email address by clicking:\nhttps://chrome.google.com/webstore/devconsole/abc/verification/xyz").is_none());
+        assert!(find_link("Verify your email address: https://example.com/activate/token123").is_none());
+        // A genuine passwordless login link still surfaces.
+        assert_eq!(find_link("Your magic link to sign in:\nhttps://app.example.com/l/tok").unwrap().host, "app.example.com");
     }
 
     #[test]

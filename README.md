@@ -7,6 +7,8 @@ top-right toast, a browser notification, and a toolbar popup.
 Built for self-hosted **mailcow / SOGo** first, with a provider-adapter design so
 other mail sources slot in.
 
+**Get it:** [Chrome Web Store](https://chromewebstore.google.com/detail/mail-otp-autofill/ldecibgopkdpdcimmnonddcjbmndleap) · [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/mail-otp-autofill/)
+
 ## Two code sources (pick in the extension's Settings)
 
 | Mode | How it gets codes | Trade-off |
@@ -25,6 +27,10 @@ The extension is the same in both modes - only the *source* of the code changes.
 ## Install
 
 ### Extension
+- **Chrome / Edge / Brave / Opera:** install from the [Chrome Web Store](https://chromewebstore.google.com/detail/mail-otp-autofill/ldecibgopkdpdcimmnonddcjbmndleap).
+- **Firefox:** install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/mail-otp-autofill/).
+
+From source (development):
 - **Chrome / Edge / Brave / Opera:** `chrome://extensions` → enable Developer mode → **Load unpacked** → select `extension/`.
 - **Firefox:** `about:debugging` → This Firefox → **Load Temporary Add-on** → select `extension/manifest.json`.
 
